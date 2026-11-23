@@ -31,38 +31,6 @@
   }
   .ios-emo { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
 
-  .splash-screen {
-    position: fixed; inset: 0; z-index: 100;
-    background: radial-gradient(circle at 50% 28%, #1e3a8a 0%, #091120 68%, #04070e 100%);
-    color: #ffffff; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; padding: 20px; gap: 14px;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
-  }
-  .splash-screen.hide { opacity: 0; visibility: hidden; pointer-events: none; }
-  .splash-video-stage {
-    width: 100%; max-width: 300px; aspect-ratio: 1 / 1; border-radius: 26px;
-    position: relative; overflow: hidden; border: 2px solid rgba(56, 189, 248, 0.5);
-    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.65);
-    background: radial-gradient(circle at 50% 40%, #1d4ed8, #0f172a 75%);
-    display: grid; place-items: center;
-  }
-  .splash-core { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; }
-  .splash-3d-dice { font-size: 60px; animation: splashDiceSpin 1.2s ease-in-out infinite; }
-  @keyframes splashDiceSpin {
-    0% { transform: rotate(0deg) scale(1); }
-    50% { transform: rotate(15deg) scale(1.12); }
-    100% { transform: rotate(0deg) scale(1); }
-  }
-  .splash-pawns { display: flex; gap: 10px; font-size: 24px; }
-  .splash-brand { font-size: 26px; font-weight: 900; letter-spacing: 1.5px; color: #fde047; }
-  .splash-bar-wrap { width: 100%; max-width: 280px; height: 8px; background: rgba(255,255,255,0.16); border-radius: 999px; overflow: hidden; }
-  .splash-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ef4444, #facc15, #22c55e, #38bdf8); border-radius: 999px; transition: width 0.12s linear; }
-  .splash-pct { font-size: 12px; font-weight: 800; color: #cbd5e1; }
-  .splash-mini-btn {
-    border: 1px solid rgba(255,255,255,0.28); background: rgba(15,23,42,0.78);
-    color: #f8fafc; border-radius: 999px; padding: 7px 16px; font-size: 12px; font-weight: 800; cursor: pointer;
-  }
-
   .qr-flag-bg { position: fixed; inset: -12px; z-index: 0; pointer-events: none; overflow: hidden; opacity: 0.2; filter: blur(4px); }
   .qr-stripe-green { position: absolute; top: 0; bottom: 0; left: 0; width: 32%; background: #16a34a; }
   .qr-stripe-yellow { position: absolute; top: 0; bottom: 0; left: 33.5%; width: 33%; background: #eab308; }
@@ -177,19 +145,6 @@
 </style>
 </head>
 <body>
-  <div class="splash-screen" id="splashScreen">
-    <div class="splash-video-stage">
-      <div class="splash-core">
-        <div class="splash-3d-dice ios-emo">🎲</div>
-        <div class="splash-pawns ios-emo"><span>🔴</span><span>🟢</span><span>🔵</span><span>🟡</span></div>
-        <div class="splash-brand">LUDO QAR</div>
-      </div>
-    </div>
-    <div class="splash-bar-wrap"><div class="splash-bar-fill" id="splashBar"></div></div>
-    <div class="splash-pct" id="splashPct">0%</div>
-    <button class="splash-mini-btn" id="skipSplashBtn" type="button">O'tkazib yuborish</button>
-  </div>
-
   <div class="qr-flag-bg">
     <div class="qr-stripe-green"></div>
     <div class="qr-line-red-l"></div>
@@ -318,19 +273,74 @@
 
 <script>
 (function() {
-  const splash = document.getElementById("splashScreen");
-  const splashBar = document.getElementById("splashBar");
-  const splashPct = document.getElementById("splashPct");
+  const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  if (tg) {
+    try { tg.ready(); tg.expand(); } catch (e) {}
+  }
+  const tgUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user : null;
 
-  function closeSplash() {
-    if (splash) splash.classList.add("hide");
+  let coins = Number(localStorage.getItem("lq_coins") || 1000);
+  let history = JSON.parse(localStorage.getItem("lq_hist") || '[{"t":"Boshlang\'ich balans","v":"+1000 🪙"}]');
+
+  const playerDefs = [
+    { id: "r", name: tgUser && tgUser.first_name ? tgUser.first_name : "Siz", ava: "😎", cls: "active-r", segCls: "r", color: "#ef4444", isBot: false },
+    { id: "g", name: "Nukus Bot", ava: "🤖", cls: "active-g", segCls: "g", color: "#22c55e", isBot: true },
+    { id: "b", name: "Moynoq Bot", ava: "🦾", cls: "active-b", segCls: "b", color: "#3b82f6", isBot: true },
+    { id: "y", name: "Qo'ng'irot Bot", ava: "👾", cls: "active-y", segCls: "y", color: "#facc15", isBot: true }
+  ];
+
+  const boardGrid = document.getElementById("boardGrid");
+  const boardWrap = document.getElementById("boardWrap");
+  for (let r = 0; r < 15; r++) {
+    for (let c = 0; c < 15; c++) {
+      const div = document.createElement("div");
+      div.className = "kcell";
+      if (r < 6 && c < 6) div.classList.add("k-red");
+      else if (r < 6 && c > 8) div.classList.add("k-green");
+      else if (r > 8 && c < 6) div.classList.add("k-blue");
+      else if (r > 8 && c > 8) div.classList.add("k-yellow");
+      else if (r === 7 && c > 0 && c < 6) div.classList.add("k-hred");
+      else if (c === 7 && r > 0 && r < 6) div.classList.add("k-hgreen");
+      else if (c === 7 && r > 8 && r < 14) div.classList.add("k-hblue");
+      else if (r === 7 && c > 8 && c < 14) div.classList.add("k-hyellow");
+      if ((r === 6 && c === 1) || (r === 1 && c === 8) || (r === 8 && c === 13) || (r === 13 && c === 6)) {
+        div.classList.add("k-star");
+      }
+      boardGrid.appendChild(div);
+    }
   }
 
-  document.getElementById("skipSplashBtn").addEventListener("click", closeSplash);
+  let tokens = { r: [-1,-1,-1,-1], g: [-1,-1,-1,-1], b: [-1,-1,-1,-1], y: [-1,-1,-1,-1] };
+  let turnIdx = 0;
+  let diceVal = 0;
+  let rolled = false;
+  let roomName = "BOT-ARENA";
 
-  let pct = 0;
-  const loader = setInterval(() => {
-    pct += 25;
-    if (splashBar) splashBar.style.width = Math.min(100, pct) + "%";
-    if (splashPct) splashPct.textContent = Math.min(100, pct) + "%";
- 
+  const yards = {
+    r: [[14, 14], [14, 28], [28, 14], [28, 28]],
+    g: [[14, 72], [14, 86], [28, 72], [28, 86]],
+    b: [[72, 14], [72, 28], [86, 14], [86, 28]],
+    y: [[72, 72], [72, 86], [86, 72], [86, 86]]
+  };
+
+  function tokenCoords(pId, tIdx, step) {
+    if (step < 0) {
+      const [top, left] = yards[pId][tIdx];
+      return { top, left };
+    }
+    const clamped = Math.min(56, step);
+    const angle = (clamped / 56) * Math.PI * 2;
+    const baseOffset = pId === "r" ? 0 : pId === "g" ? Math.PI * 0.5 : pId === "b" ? Math.PI * 1.5 : Math.PI;
+    const a = angle + baseOffset;
+    const radius = step >= 50 ? (56 - clamped) * 4.5 : 36;
+    return {
+      top: Math.max(8, Math.min(92, 50 + Math.sin(a) * radius)),
+      left: Math.max(8, Math.min(92, 50 + Math.cos(a) * radius))
+    };
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+              
